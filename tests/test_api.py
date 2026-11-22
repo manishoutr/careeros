@@ -6,7 +6,6 @@ touches the developer's real data.
 import os
 import tempfile
 
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "test.db")
 os.environ["LLM_MODE"] = "offline"
 os.environ["CAREEROS_DEMO_SEED"] = "1"  # these tests use the fictional demo catalogue
 os.environ["CAREEROS_AUTO_SYNC"] = "0"

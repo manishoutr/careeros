@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "auto.db")
 
 from app.config import settings  # noqa: E402
 from app.db import SessionLocal, init_db  # noqa: E402
@@ -81,3 +80,28 @@ def test_status_reports_freshness(db):
     db.commit()
     st = scheduler.status(db)
     assert st["last_success_at"] and st["sources"] == {"remotive": 5}
+
+
+def test_unverified_listings_age_out(db):
+    from datetime import date
+    old = (date.today() - timedelta(days=5)).isoformat()
+    fresh = date.today().isoformat()
+    db.add(Job(dedupe_key="o", title="Old", company="A", source="remotive", last_verified_at=old))
+    db.add(Job(dedupe_key="n", title="New", company="B", source="remotive", last_verified_at=fresh))
+    db.commit()
+    assert sync_mod.expire_unverified(db) == 1
+    assert {j.title: j.is_expired for j in db.query(Job).all()} == {"Old": 1, "New": 0}
+
+
+def test_internship_query_excludes_senior_roles():
+    from app.services.ranking import apply_query_constraints, understand_query
+
+    class J:
+        def __init__(self, title, jt, lvl, loc="Bangalore, India"):
+            self.title, self.job_type, self.level, self.location = title, jt, lvl, loc
+    jobs = [J("SRE", "full-time", "senior"), J("Intern", "internship", "entry"),
+            J("Junior Dev", "full-time", "entry"), J("Engineer", "full-time", "")]
+    out, note = apply_query_constraints(jobs, understand_query("backend internships using Python in India"))
+    assert [j.title for j in out] == ["Intern", "Junior Dev"] and "Internship" in note
+    out, note = apply_query_constraints(jobs, understand_query("backend engineer python"))
+    assert len(out) == 4 and note is None

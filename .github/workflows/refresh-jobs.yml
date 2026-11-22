@@ -1,11 +1,12 @@
 name: refresh-jobs
 
-# Wakes the free-tier host and asks it to refresh the real job feeds. The app
-# enforces a 6-hour cooldown itself (Remotive asks for at most 4 requests a
+# Wakes the free-tier host and asks it to refresh the real job feeds. Ticks
+# every 3 hours so one always lands soon after the 6-hour cooldown ends; the
+# app enforces that cooldown itself (Remotive asks for at most 4 requests a
 # day), so extra or manual runs are harmless.
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "23 */3 * * *"
   workflow_dispatch:
 
 jobs:

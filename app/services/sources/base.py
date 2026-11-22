@@ -30,17 +30,18 @@ class RawJob:
 def infer_type_and_level(title: str, job_types: Optional[List[str]] = None) -> tuple:
     """Best-effort job_type/level from the title and source tags."""
     blob = " ".join([title or ""] + (job_types or [])).lower()
-    if "intern" in blob or "working student" in blob or "trainee" in blob:
+    # Word boundaries: "Internal Auditor" is not an internship.
+    if re.search(r"\b(intern|interns|internship|working student|trainee)\b", blob):
         return "internship", "entry"
     jtype = "contract" if "contract" in blob or "freelance" in blob else "full-time"
-    if any(w in blob for w in ("senior", "sr.", "lead", "principal", "staff")):
+    if re.search(r"\b(senior|sr\.?|lead|principal|staff|director|head of|vp)\b", blob):
         level = "senior"
-    elif any(w in blob for w in ("junior", "entry", "graduate", "associate", "fresher")):
+    elif re.search(r"\b(junior|entry|graduate|fresher)\b", blob):
         level = "entry"
-    elif any(w in blob for w in ("mid", "ii", "2+")):
+    elif re.search(r"\b(mid|ii|2\+)\b", blob):
         level = "mid"
     else:
-        level = "entry" if "intern" in blob else ""
+        level = ""
     return jtype, level
 
 

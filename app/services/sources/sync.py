@@ -22,6 +22,9 @@ log = logging.getLogger("careeros.sources")
 FETCHERS = {}
 SOURCE_TIMEOUT = 20
 EXPIRE_AFTER_DAYS = 45
+# A listing no source has confirmed for this long is hidden, even when its
+# source keeps erroring or returning empty answers.
+UNVERIFIED_EXPIRE_DAYS = 3
 
 
 def _register():
@@ -52,6 +55,21 @@ def _stale(posted: str) -> bool:
     except (ValueError, TypeError):
         return False
     return date.today() - d > timedelta(days=EXPIRE_AFTER_DAYS)
+
+
+def expire_unverified(db, days: int = UNVERIFIED_EXPIRE_DAYS) -> int:
+    """Bounded aging: hide listings whose source has not confirmed them within
+    `days`. Covers repeated errors and empty responses, which deliberately do
+    not expire anything on their own."""
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    n = 0
+    for job in db.query(Job).filter(Job.is_expired == 0, Job.source != "seed").all():
+        if job.last_verified_at and job.last_verified_at < cutoff:
+            job.is_expired = 1
+            n += 1
+    if n:
+        db.commit()
+    return n
 
 
 def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
@@ -92,6 +110,7 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
             if existing is not None:
                 existing.last_verified_at = today
                 existing.is_expired = 0
+                existing.job_type, existing.level = raw.job_type, raw.level  # classifier fixes reach old rows
                 report["updated"] += 1
                 continue
             key = dedupe_key(raw.title, raw.company, raw.location)
@@ -139,6 +158,8 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
         del raw_jobs, to_embed
         db.expire_all()
         _release_memory()
+
+    report["expired"] += expire_unverified(db)
 
     from .. import vectorstore  # keep pgvector store in step, when enabled
     if vectorstore.available():

@@ -33,6 +33,19 @@ _QUERY_STOPWORDS = STOPWORDS | {
     "position", "positions", "opening", "openings", "intern"}
 
 
+# Words that state an entry-level intent. When present, seniority is a hard
+# constraint, like "remote": a senior or principal role is not an internship
+# match no matter how well its skills overlap.
+_ENTRY_INTENT = re.compile(
+    r"\b(intern|interns|internship|internships|trainee|trainees|fresher|freshers|"
+    r"entry[- ]level|graduate|graduates|junior|new grad)\b")
+
+
+_INDIA_CITIES = ("india", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai",
+                 "delhi", "noida", "gurgaon", "gurugram", "chennai", "kolkata",
+                 "bhubaneswar", ", ind")
+
+
 class QueryUnderstanding(dict):
     """What we extracted from the natural-language query."""
     skills: List[str]
@@ -52,7 +65,9 @@ def understand_query(query: str) -> QueryUnderstanding:
     terms = [t for t in tokenize(query)
              if t not in _QUERY_STOPWORDS and t not in skills
              and t not in KNOWN_LOCATIONS]
-    return QueryUnderstanding(skills=skills, location=location, terms=terms)
+    entry_intent = bool(_ENTRY_INTENT.search(lowered))
+    return QueryUnderstanding(skills=skills, location=location, terms=terms,
+                              entry_intent=entry_intent)
 
 
 def apply_query_constraints(jobs, qu: QueryUnderstanding):
@@ -62,11 +77,33 @@ def apply_query_constraints(jobs, qu: QueryUnderstanding):
     roles, non-remote jobs are excluded entirely instead of silently ranking
     below remote ones. Returns (filtered_jobs, note_or_None).
     """
+    notes = []
+    if qu.get("entry_intent"):
+        before = len(jobs)
+        jobs = [j for j in jobs
+                if (j.job_type or "").lower() == "internship"
+                or (j.level or "").lower() == "entry"]
+        notes.append(f"Internship/entry-level requested: showing only internship or "
+                     f"entry-level roles ({len(jobs)} of {before}).")
     if (qu.get("location") or "").lower() == "remote":
-        remote = [j for j in jobs if "remote" in (j.location or "").lower()]
-        return remote, (f"Remote requested: showing only remote roles "
-                        f"({len(remote)} of {len(jobs)} in the catalogue).")
-    return jobs, None
+        before = len(jobs)
+        jobs = [j for j in jobs if "remote" in (j.location or "").lower()]
+        notes.append(f"Remote requested: showing only remote roles "
+                     f"({len(jobs)} of {before}).")
+    wanted = (qu.get("location") or "").lower()
+    if wanted and wanted != "remote":
+        keys = list(_INDIA_CITIES) if wanted == "india" else [wanted]
+        if wanted in ("bangalore",):
+            keys = ["bangalore", "bengaluru"]
+        local = [j for j in jobs if any(k in (j.location or "").lower() for k in keys)]
+        if local:
+            notes.append(f"Location requested: showing {len(local)} of {len(jobs)} roles "
+                         f"in {qu['location']}.")
+            jobs = local
+        elif jobs:
+            notes.append(f"No roles in {qu['location']} matched; showing the closest "
+                         f"matches elsewhere.")
+    return jobs, (" ".join(notes) or None)
 
 
 def _norm_skills(skills: List[str]) -> set:
