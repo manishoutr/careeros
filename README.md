@@ -27,6 +27,16 @@ review before using.
    with its source. A code-level validator rejects drafts that invent skills,
    employers or qualifications.
 
+## Live demo
+
+https://careeros-esm5.onrender.com
+
+Hosted on Render's free tier in offline mode (no API key): the assistant and
+tailoring use the deterministic fallbacks, and the job catalogue is fictional.
+Free-tier notes: the service sleeps after 15 minutes idle (first load can
+take about a minute to wake), and uploaded data is ephemeral - it resets on
+redeploy or restart.
+
 ## Quickstart (5 minutes, no API key needed)
 
 ```bash
