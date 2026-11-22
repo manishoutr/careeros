@@ -37,6 +37,14 @@ Free-tier notes: the service sleeps after 15 minutes idle (first load can
 take about a minute to wake), and uploaded data is ephemeral - it resets on
 redeploy or restart.
 
+## Screenshots
+
+![Find roles: hybrid search with explainable match scores](docs/screenshots/find-roles.png)
+
+![Assistant: grounded answers with tool-call trace](docs/screenshots/assistant.png)
+
+![Resume studio: tailored draft with a logged change history](docs/screenshots/resume-studio.png)
+
 ## Quickstart (5 minutes, no API key needed)
 
 ```bash
