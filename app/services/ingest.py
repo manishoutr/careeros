@@ -5,7 +5,7 @@ import json
 from typing import IO, Tuple
 
 from ..models import Job
-from .embeddings import embed
+from .embeddings import embed_batch, model_version
 
 
 def dedupe_key(title: str, company: str, location: str) -> str:
@@ -34,6 +34,7 @@ def ingest_csv(db, fileobj: IO[str]) -> Tuple[int, int]:
         raise ValueError(f"CSV is missing required columns: {sorted(missing)}")
 
     inserted = skipped = 0
+    pending = []
     for row in reader:
         title = (row.get("title") or "").strip()
         company = (row.get("company") or "").strip()
@@ -57,9 +58,24 @@ def ingest_csv(db, fileobj: IO[str]) -> Tuple[int, int]:
             description=description,
             url=(row.get("url") or "").strip(),
             posted_date=(row.get("posted_date") or "").strip(),
-            embedding=json.dumps(embed(job_text(title, company, location, skills, description))),
+            source="seed",
+            embedding_model="",
+            embedding="[]",
         )
         db.add(job)
+        pending.append(job)
         inserted += 1
+    db.flush()  # assign ids before embedding
+    if pending:
+        texts = [job_text(j.title, j.company, j.location,
+                          json.loads(j.skills), j.description) for j in pending]
+        vecs = embed_batch(texts)
+        ver = model_version()
+        for job, vec in zip(pending, vecs):
+            job.embedding = json.dumps(vec)
+            job.embedding_model = ver
     db.commit()
+    from . import vectorstore  # keep the pgvector store in step, when enabled
+    if vectorstore.available():
+        vectorstore.sync_all(db)
     return inserted, skipped

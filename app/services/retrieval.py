@@ -56,8 +56,24 @@ def _minmax(scores: Sequence[float]) -> List[float]:
     return [(s - lo) / (hi - lo) for s in scores]
 
 
+def rrf_scores(bm25_raw: Sequence[float], vec_raw: Sequence[float],
+               k: int = 60) -> List[float]:
+    """Reciprocal Rank Fusion: combine two ranked lists by rank position,
+    not score scale. 1/(k+rank) is scale-free, so it behaves the same for
+    BM25's unbounded scores and cosine's [-1, 1] range."""
+    def ranks(scores):
+        order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        r = [0] * len(scores)
+        for pos, i in enumerate(order):
+            r[i] = pos + 1
+        return r
+    rb, rv = ranks(bm25_raw), ranks(vec_raw)
+    return [1.0 / (k + b) + 1.0 / (k + v) for b, v in zip(rb, rv)]
+
+
 def hybrid_scores(texts: Sequence[str], embeddings: Sequence[List[float]],
-                  query: str, alpha: float = 0.5) -> Tuple[List[float], Dict[str, List[float]]]:
+                  query: str, alpha: float = 0.5,
+                  fusion: str = "weighted") -> Tuple[List[float], Dict[str, List[float]]]:
     """Return (combined, parts). Combined scores preserve ABSOLUTE evidence
     strength: keyword signal is zeroed when BM25 found no term match at all,
     and vector signal is scaled by the raw cosine, so a query with no real
@@ -69,10 +85,13 @@ def hybrid_scores(texts: Sequence[str], embeddings: Sequence[List[float]],
     qv = embed(query)
     vec_raw = [cosine(qv, e) for e in embeddings]
     vec = _minmax(vec_raw)
-    combined = []
-    for b, br, v, vr in zip(bm25, bm25_raw, vec, vec_raw):
-        b_signal = b if br > 0 else 0.0
-        v_signal = v * max(0.0, vr)
-        combined.append(alpha * b_signal + (1 - alpha) * v_signal)
+    if fusion == "rrf":
+        combined = rrf_scores(bm25_raw, [max(0.0, v) for v in vec_raw])
+    else:
+        combined = []
+        for b, br, v, vr in zip(bm25, bm25_raw, vec, vec_raw):
+            b_signal = b if br > 0 else 0.0
+            v_signal = v * max(0.0, vr)
+            combined.append(alpha * b_signal + (1 - alpha) * v_signal)
     return combined, {"bm25": bm25, "vector": vec,
                       "bm25_raw": bm25_raw, "vector_raw": vec_raw}

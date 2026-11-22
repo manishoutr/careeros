@@ -1,0 +1,17 @@
+{
+  "_comment": "Graded relevance judgments over seed/jobs.csv rows (1-based row = job order in the CSV). Grade 2 = strong match for the query, 1 = partial. Rows not listed are irrelevant (0). Keep judgments honest: a grader should be able to defend each one from the job's title/skills/description.",
+  "queries": [
+    {"q": "python backend internship", "grades": {"1": 2, "2": 2, "18": 2, "25": 2, "29": 2, "12": 1, "15": 1, "26": 1, "32": 1}},
+    {"q": "react frontend internship", "grades": {"6": 2, "17": 2, "30": 2, "7": 1, "13": 1}},
+    {"q": "machine learning intern", "grades": {"5": 2, "22": 2, "27": 2, "4": 1, "32": 1, "15": 1}},
+    {"q": "devops cloud internship", "grades": {"8": 2, "9": 2, "16": 2, "28": 1}},
+    {"q": "data analyst internship sql", "grades": {"14": 2, "27": 2, "4": 1, "21": 1}},
+    {"q": "android mobile developer intern", "grades": {"10": 2}},
+    {"q": "qa testing automation internship", "grades": {"19": 2, "31": 1, "29": 1}},
+    {"q": "security internship", "grades": {"20": 2}},
+    {"q": "remote backend internship", "grades": {"25": 2, "26": 2, "18": 1}},
+    {"q": "nlp deep learning internship", "grades": {"15": 2, "22": 2, "32": 2, "5": 1}},
+    {"q": "java spring backend engineer", "grades": {"3": 2, "11": 2, "24": 1}},
+    {"q": "full stack javascript internship", "grades": {"7": 2, "26": 2, "30": 1, "6": 1}}
+  ]
+}

@@ -28,9 +28,15 @@ class Job(Base):
     level = Column(String, default="")          # entry / mid / senior
     skills = Column(Text, default="[]")         # JSON list of required skills
     description = Column(Text, default="")
-    url = Column(String, default="")
+    url = Column(String, default="")            # application URL on the source
     posted_date = Column(String, default="")
     embedding = Column(Text, default="[]")      # JSON list of floats
+    # Provenance: where this listing came from and how fresh it is.
+    source = Column(String, default="seed")     # seed / remotive / arbeitnow / greenhouse / lever
+    source_id = Column(String, default="")      # id within the source, for re-sync
+    last_verified_at = Column(String, default="")  # ISO date the source last showed it
+    is_expired = Column(Integer, default=0)     # 1 = gone from source or stale
+    embedding_model = Column(String, default="")  # which model wrote `embedding`
 
     def skills_list(self) -> list:
         return json.loads(self.skills or "[]")

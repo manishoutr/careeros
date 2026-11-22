@@ -16,11 +16,15 @@ from sqlalchemy.orm import Session
 from .db import get_db, init_db
 from .models import ChatMessage, Job, Profile, TailoredDraft
 from .schemas import (ChatRequest, ChatResponse, JobOut, ProfileData,
-                      RankedJob, SearchRequest, SearchResponse,
-                      TailorRequest, TailorResponse)
+                      RankedJob, SearchRequest, SearchResponse, SkillGapResponse,
+                      SyncResponse, TailorRequest, TailorResponse)
 from .config import settings
 from .services import assistant as assistant_service
+from .services import skillgap as skillgap_service
 from .services import tailor as tailor_service
+from .services import vectorstore
+from .services.embeddings import backend_info as embedding_backend_info
+from .services.sources.sync import sync_sources
 from .services.ingest import ingest_csv
 from .services.llm import llm
 from .services.parsing import extract_text, parse_resume
@@ -85,7 +89,10 @@ def _job_out(job: Job) -> JobOut:
     return JobOut(id=job.id, title=job.title, company=job.company,
                   location=job.location, job_type=job.job_type, level=job.level,
                   skills=job.skills_list(), description=job.description,
-                  url=job.url, posted_date=job.posted_date)
+                  url=job.url, posted_date=job.posted_date,
+                  source=job.source or "seed",
+                  last_verified_at=job.last_verified_at or "",
+                  is_expired=bool(job.is_expired))
 
 
 def _get_profile(db: Session):
@@ -99,7 +106,12 @@ def _get_profile(db: Session):
 
 @app.get("/api/health")
 def health(db: Session = Depends(get_db)):
-    return {"status": "ok", "llm_mode": llm.mode, "jobs": db.query(Job).count()}
+    active = db.query(Job).filter(Job.is_expired == 0).count()
+    return {"status": "ok", "llm_mode": llm.mode,
+            "jobs": db.query(Job).count(), "active_jobs": active,
+            "embeddings": embedding_backend_info(),
+            "vectorstore": "pgvector" if vectorstore.available() else "python",
+            "db": "postgresql" if settings.database_url.startswith("postgres") else "sqlite"}
 
 
 @app.get("/api/metrics")
@@ -166,8 +178,34 @@ def ingest(db: Session = Depends(get_db)):
 
 
 @app.get("/api/jobs", response_model=list[JobOut])
-def list_jobs(db: Session = Depends(get_db)):
-    return [_job_out(j) for j in db.query(Job).order_by(Job.id).all()]
+def list_jobs(skip: int = 0, limit: int = 200, include_expired: bool = False,
+              source: str = "", db: Session = Depends(get_db)):
+    q = db.query(Job)
+    if not include_expired:
+        q = q.filter(Job.is_expired == 0)
+    if source:
+        q = q.filter(Job.source == source)
+    limit = max(1, min(limit, 500))
+    return [_job_out(j) for j in q.order_by(Job.id).offset(max(0, skip)).limit(limit).all()]
+
+
+@app.post("/api/jobs/sync", response_model=SyncResponse)
+def sync_jobs_endpoint(db: Session = Depends(get_db)):
+    """Fetch the configured external job sources and merge new listings."""
+    report = sync_sources(db)
+    METRICS["ingest_runs"] += 1
+    return SyncResponse(**report)
+
+
+@app.get("/api/jobs/{job_id}/skill-gap", response_model=SkillGapResponse)
+def skill_gap(job_id: int, db: Session = Depends(get_db)):
+    job = db.query(Job).filter_by(id=job_id).first()
+    if job is None:
+        raise HTTPException(404, f"Job {job_id} not found")
+    _, profile = _get_profile(db)
+    matched, missing, coverage, advice = skillgap_service.analyze(profile, job)
+    return SkillGapResponse(job=_job_out(job), matched=matched, missing=missing,
+                            coverage=coverage, advice=advice)
 
 
 # --- search ----------------------------------------------------------------
@@ -175,7 +213,9 @@ def list_jobs(db: Session = Depends(get_db)):
 @app.post("/api/search", response_model=SearchResponse)
 def search(req: SearchRequest, db: Session = Depends(get_db)):
     METRICS["searches"] += 1
-    jobs = db.query(Job).all()
+    jobs = vectorstore.candidate_jobs(db, req.query)
+    if jobs is None:
+        jobs = db.query(Job).filter(Job.is_expired == 0).all()
     if not jobs:
         return SearchResponse(query=req.query, count=0, results=[])
     _, profile = _get_profile(db)

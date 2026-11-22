@@ -38,6 +38,27 @@ class JobOut(BaseModel):
     description: str
     url: str
     posted_date: str
+    source: str = "seed"
+    last_verified_at: str = ""
+    is_expired: bool = False
+
+
+class SkillGapResponse(BaseModel):
+    """Job requirements vs the candidate profile."""
+    job: JobOut
+    matched: List[str]          # required skills the candidate has
+    missing: List[str]          # required skills not in the profile
+    coverage: float             # matched / required (0-1)
+    advice: List[str]           # one plain suggestion per missing skill
+
+
+class SyncResponse(BaseModel):
+    fetched: int
+    inserted: int
+    updated: int
+    skipped_duplicates: int
+    expired: int
+    sources: dict               # per-source counts or error message
 
 
 class ScoreBreakdown(BaseModel):

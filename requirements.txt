@@ -5,4 +5,13 @@ pydantic>=2.6
 pypdf>=4.2
 python-multipart>=0.0.9
 anthropic>=0.40
+onnxruntime>=1.17
+tokenizers>=0.15
+huggingface_hub>=0.24
+numpy>=1.26
+requests>=2.31
+langgraph>=0.2
+pgvector>=0.2.5
 psycopg2-binary>=2.9 ; python_version >= "3.10"
+# Claude mode only; imported lazily so offline installs can omit it.
+langchain-anthropic>=0.2
