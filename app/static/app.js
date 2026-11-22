@@ -1,16 +1,9 @@
-/* CareerOS frontend - plain fetch against /api/*. No build step. */
+/* CareerOS frontend - Launchpad UI. Plain fetch against /api/*. No build step. */
 const $ = (sel) => document.querySelector(sel);
 
-// --- tabs ---
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    $("#tab-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "tailor") loadTailorJobs();
-  });
-});
+function esc(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
 
 async function api(path, options = {}) {
   const res = await fetch(path, options);
@@ -22,10 +15,20 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+// --- views (persistent sidebar) ---
+function showView(name) {
+  document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
+  if (name === "studio") loadTailorJobs();
+}
+document.querySelectorAll(".nav-item").forEach((btn) => {
+  btn.addEventListener("click", () => showView(btn.dataset.view));
+});
+
 // --- health badge ---
 api("/api/health").then((h) => {
   const badge = $("#mode-badge");
-  badge.textContent = h.llm_mode === "claude" ? "Claude connected" : "Offline mode";
+  badge.textContent = (h.llm_mode === "claude" ? "Claude connected" : "Offline mode") + " · fictional jobs";
   badge.classList.toggle("claude", h.llm_mode === "claude");
 });
 
@@ -36,7 +39,13 @@ let lastDraft = null;
 function renderProfile(p) {
   currentProfile = p;
   const div = $("#profile-view");
-  if (!p) { div.innerHTML = "<p class='hint'>No profile yet.</p>"; return; }
+  const status = $("#rail-status");
+  if (!p) {
+    div.innerHTML = "<p class='hint'>No profile yet.</p>";
+    status.innerHTML = "<small>No profile yet</small>";
+    return;
+  }
+  status.innerHTML = `<small><b>${esc(p.name || "Profile")}</b><br>Profile ready<br>${p.skills.length} skills on file</small>`;
   div.innerHTML = `
     <div class="card">
       <div class="field-row"><label>Name</label><input id="p-name" value="${esc(p.name)}"></div>
@@ -51,10 +60,6 @@ function renderProfile(p) {
       </div>
     </div>`;
   $("#save-profile").classList.remove("hidden");
-}
-
-function esc(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 }
 
 $("#upload-btn").addEventListener("click", async () => {
@@ -88,6 +93,7 @@ $("#save-profile").addEventListener("click", async () => {
       body: JSON.stringify(currentProfile),
     });
     $("#save-status").textContent = "Saved.";
+    renderProfile(currentProfile);
   } catch (e) {
     $("#save-status").textContent = "Error: " + e.message;
   }
@@ -95,42 +101,92 @@ $("#save-profile").addEventListener("click", async () => {
 
 api("/api/profile").then(renderProfile).catch(() => renderProfile(null));
 
-// --- search ---
-function scoreBar(label, value) {
+// --- search (split view: results | why this matches) ---
+let remoteOnly = false;
+let lastResults = [];
+let selectedIdx = null;
+
+$("#remote-toggle").addEventListener("click", () => {
+  remoteOnly = !remoteOnly;
+  $("#remote-toggle").classList.toggle("on", remoteOnly);
+  $("#remote-toggle").setAttribute("aria-pressed", String(remoteOnly));
+  if ($("#search-input").value.trim()) runSearch();
+});
+
+function bar(label, value) {
   const pct = Math.round(value * 100);
-  return `<div class="scorebar">${label} ${pct}%<div class="bar"><div class="fill" style="width:${pct}%"></div></div></div>`;
+  return `<div class="bar-label">${label} · ${pct}</div><div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
 }
 
-$("#search-btn").addEventListener("click", async () => {
-  const q = $("#search-input").value.trim();
+function renderResults() {
+  const col = $("#search-results");
+  col.innerHTML = lastResults.map((r, i) => `
+    <div class="card ${i === selectedIdx ? "selected" : ""}" data-idx="${i}">
+      <div class="card-head"><h3>${esc(r.job.title)}</h3><span class="score-inline">${Math.round(r.scores.total * 100)}</span></div>
+      <div class="meta">${esc(r.job.company)} · ${esc(r.job.location)} · ${esc(r.job.job_type)} · ${esc(r.job.level)}</div>
+      ${i === selectedIdx ? `<div>${r.job.skills.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
+    </div>`).join("");
+  col.querySelectorAll(".card").forEach((c) => {
+    c.addEventListener("click", () => selectResult(Number(c.dataset.idx)));
+  });
+}
+
+function selectResult(i) {
+  selectedIdx = i;
+  renderResults();
+  const r = lastResults[i];
+  const reasons = r.reasons.filter((x) => !x.startsWith("Remote requested"));
+  $("#match-panel").classList.remove("hidden");
+  $("#match-panel").innerHTML = `
+    <small class="panel-label">Why this matches</small>
+    <div class="score-row">
+      <span class="score">${Math.round(r.scores.total * 100)}</span>
+      <span class="score-sub">/ 100<br>${esc(r.job.title)} · ${esc(r.job.company)}</span>
+    </div>
+    ${bar("Relevance", r.scores.relevance)}
+    ${bar("Skills", r.scores.skills)}
+    ${bar("Location", r.scores.location)}
+    ${bar("Experience", r.scores.experience)}
+    <ul class="reasons">${reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    <button class="btn" id="tailor-cta">Tailor my resume</button>`;
+  $("#tailor-cta").addEventListener("click", () => {
+    showView("studio");
+    tailorForJob(r.job.id);
+  });
+}
+
+async function runSearch() {
+  let q = $("#search-input").value.trim();
   if (!q) return;
+  if (remoteOnly && !/\bremote\b/i.test(q)) q += " remote";
   $("#search-results").innerHTML = "<p class='hint'>Searching...</p>";
+  $("#match-panel").classList.add("hidden");
+  selectedIdx = null;
   try {
     const data = await api("/api/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: q, k: 10 }),
     });
+    lastResults = data.results;
+    const note = data.results.length && data.results[0].reasons[0].startsWith("Remote requested")
+      ? data.results[0].reasons[0] : null;
+    $("#result-meta").textContent = data.results.length
+      ? `${data.results.length} fictional results${note ? " · " + note : ""}`
+      : "No jobs in the catalogue matched";
     if (!data.results.length) {
       $("#search-results").innerHTML = "<p class='hint'>No jobs in the catalogue matched.</p>";
       return;
     }
-    $("#search-results").innerHTML = data.results.map((r) => `
-      <div class="card">
-        <h3>${esc(r.job.title)}</h3>
-        <div class="meta">${esc(r.job.company)} · ${esc(r.job.location)} · ${esc(r.job.job_type)} · ${esc(r.job.level)}</div>
-        <div>${r.job.skills.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>
-        <div class="scorebars">
-          ${scoreBar("Relevance", r.scores.relevance)}${scoreBar("Skills", r.scores.skills)}
-          ${scoreBar("Location", r.scores.location)}${scoreBar("Experience", r.scores.experience)}
-          ${scoreBar("Total", r.scores.total)}
-        </div>
-        <ul class="reasons">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-      </div>`).join("");
+    renderResults();
+    selectResult(0);
   } catch (e) {
     $("#search-results").innerHTML = "<p class='hint'>Error: " + esc(e.message) + "</p>";
   }
-});
+}
+
+$("#search-btn").addEventListener("click", runSearch);
+$("#search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
 
 // --- assistant ---
 function addMsg(who, text, trace) {
@@ -159,11 +215,9 @@ $("#chat-btn").addEventListener("click", async () => {
     addMsg("CareerOS", "Error: " + e.message);
   }
 });
-
 $("#chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#chat-btn").click(); });
-$("#search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#search-btn").click(); });
 
-// --- tailor ---
+// --- resume studio ---
 async function loadTailorJobs() {
   try {
     const jobs = await api("/api/jobs");
@@ -171,6 +225,14 @@ async function loadTailorJobs() {
       `<option value="${j.id}">${esc(j.title)} - ${esc(j.company)}</option>`).join("");
   } catch (e) {
     $("#tailor-job").innerHTML = "<option>No jobs ingested</option>";
+  }
+}
+
+function tailorForJob(jobId) {
+  const sel = $("#tailor-job");
+  if ([...sel.options].some((o) => Number(o.value) === jobId)) {
+    sel.value = String(jobId);
+    $("#tailor-btn").click();
   }
 }
 
@@ -202,7 +264,7 @@ $("#tailor-btn").addEventListener("click", async () => {
         ${(d.education || []).map((e) => `
           <div class="r-entry">${esc(e.degree)}${e.institution ? " - " + esc(e.institution) : ""} ${esc(e.year || "")}</div>`).join("") || "<p class='hint'>None</p>"}
       </div>
-      <button id="download-draft" class="secondary" style="margin:8px 0">Download draft as .txt</button>
+      <button id="download-draft" class="btn secondary" style="margin:8px 0">Download draft as .txt</button>
       <h3 style="margin-top:12px">Changes to review (${res.changes.length})</h3>
       ${res.changes.map((c) => `
         <div class="change">
