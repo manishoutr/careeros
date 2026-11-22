@@ -68,6 +68,7 @@ def startup() -> None:
     try:
         if not settings.demo_seed:
             _purge_demo_jobs(db)
+        _fix_internship_labels(db)
         if settings.demo_seed and SEED_CSV.exists() and db.query(Job).count() == 0:
             with open(SEED_CSV, newline="", encoding="utf-8") as f:
                 inserted, skipped = ingest_csv(db, f)
@@ -84,6 +85,22 @@ def startup() -> None:
     finally:
         db.close()
     scheduler.start()
+
+
+def _fix_internship_labels(db) -> None:
+    """Older rows were labelled internship by substring ("Internal Auditor").
+    Re-derive the label from the title for those rows only; the next sync
+    refreshes everything else."""
+    from .services.sources.base import infer_type_and_level
+    n = 0
+    for job in db.query(Job).filter(Job.job_type == "internship", Job.source != "seed").all():
+        jtype, level = infer_type_and_level(job.title)
+        if jtype != "internship":
+            job.job_type, job.level = jtype, level
+            n += 1
+    if n:
+        db.commit()
+        log.info("relabelled %d listings wrongly marked internship", n)
 
 
 def _purge_demo_jobs(db) -> None:

@@ -105,3 +105,16 @@ def test_internship_query_excludes_senior_roles():
     assert [j.title for j in out] == ["Intern", "Junior Dev"] and "Internship" in note
     out, note = apply_query_constraints(jobs, understand_query("backend engineer python"))
     assert len(out) == 4 and note is None
+
+
+def test_wrong_internship_labels_are_repaired(db):
+    from app import main
+    db.add(Job(dedupe_key="a", title="Senior Internal Auditor", company="X", source="greenhouse",
+               job_type="internship", level="entry"))
+    db.add(Job(dedupe_key="b", title="Software Engineer, Intern", company="X", source="greenhouse",
+               job_type="internship", level="entry"))
+    db.commit()
+    main._fix_internship_labels(db)
+    got = {j.title: (j.job_type, j.level) for j in db.query(Job).all()}
+    assert got["Senior Internal Auditor"] == ("full-time", "senior")
+    assert got["Software Engineer, Intern"] == ("internship", "entry")
