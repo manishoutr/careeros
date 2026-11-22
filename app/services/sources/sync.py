@@ -109,7 +109,7 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
                 url=raw.url, posted_date=raw.posted_date,
                 source=raw.source, source_id=raw.source_id,
                 last_verified_at=today,
-                is_expired=1 if _stale(raw.posted_date) else 0,
+                is_expired=1 if (name != "greenhouse" and _stale(raw.posted_date)) else 0,
                 embedding_model="",  # set after embedding below
                 embedding="[]",
             )
@@ -132,7 +132,7 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
                  .filter(Job.source == name, Job.is_expired == 0)
                  .all())
         for job in stale:
-            if job.source_id not in seen_ids or _stale(job.posted_date):
+            if job.source_id not in seen_ids or (name != "greenhouse" and _stale(job.posted_date)):
                 job.is_expired = 1
                 report["expired"] += 1
         db.commit()
