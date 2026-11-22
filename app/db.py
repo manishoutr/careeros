@@ -9,8 +9,20 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import settings
 
+
+def _normalize_db_url(url: str) -> str:
+    """Pin the Postgres driver to psycopg2 (in requirements) regardless of
+    SQLAlchemy version: 2.1 made psycopg3 the default for postgresql:// and
+    Render images then crashed with ModuleNotFoundError: psycopg."""
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):  # some hosts still emit the old scheme
+        return "postgresql+psycopg2://" + url[len("postgres://"):]
+    return url
+
+
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine = create_engine(_normalize_db_url(settings.database_url), connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 Base = declarative_base()
 
