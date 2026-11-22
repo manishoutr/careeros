@@ -24,7 +24,7 @@ from .services import tailor as tailor_service
 from .services.ingest import ingest_csv
 from .services.llm import llm
 from .services.parsing import extract_text, parse_resume
-from .services.ranking import score_job, understand_query
+from .services.ranking import apply_query_constraints, score_job, understand_query
 from .services.retrieval import hybrid_scores
 
 logging.basicConfig(level=logging.INFO)
@@ -171,6 +171,9 @@ def search(req: SearchRequest, db: Session = Depends(get_db)):
         return SearchResponse(query=req.query, count=0, results=[])
     _, profile = _get_profile(db)
     qu = understand_query(req.query)
+    jobs, constraint_note = apply_query_constraints(jobs, qu)
+    if not jobs:
+        return SearchResponse(query=req.query, count=0, results=[])
     combined, _parts = hybrid_scores(
         [j.searchable_text() for j in jobs],
         [j.embedding_list() for j in jobs],
@@ -178,6 +181,8 @@ def search(req: SearchRequest, db: Session = Depends(get_db)):
     ranked = []
     for job, relevance in zip(jobs, combined):
         scores, reasons = score_job(job, relevance, qu, profile)
+        if constraint_note:
+            reasons.insert(0, constraint_note)
         ranked.append(RankedJob(job=_job_out(job), scores=scores, reasons=reasons))
     ranked.sort(key=lambda r: r.scores.total, reverse=True)
     top = ranked[: max(1, min(req.k, 50))]

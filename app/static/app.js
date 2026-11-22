@@ -31,6 +31,7 @@ api("/api/health").then((h) => {
 
 // --- profile ---
 let currentProfile = null;
+let lastDraft = null;
 
 function renderProfile(p) {
   currentProfile = p;
@@ -183,9 +184,25 @@ $("#tailor-btn").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_id: jobId }),
     });
+    lastDraft = res.draft;
+    const d = res.draft;
     $("#tailor-output").innerHTML = `
       <h3 style="margin-top:12px">Draft for ${esc(res.job.title)} at ${esc(res.job.company)}</h3>
-      <pre class="draft">${esc(JSON.stringify(res.draft, null, 2))}</pre>
+      <div class="card resume">
+        <h3 class="r-name">${esc(d.name)}</h3>
+        <div class="meta">Target: ${esc(d.target_role)}</div>
+        <p class="r-summary">${esc(d.summary)}</p>
+        <h4>Skills</h4>
+        <div>${(d.skills || []).map((x) => `<span class="chip">${esc(x)}</span>`).join("")}</div>
+        <h4>Experience</h4>
+        ${(d.experience || []).map((e) => `
+          <div class="r-entry"><strong>${esc(e.title)}</strong> - ${esc(e.company)}
+            <span class="meta">${esc(e.period)}</span></div>`).join("") || "<p class='hint'>None</p>"}
+        <h4>Education</h4>
+        ${(d.education || []).map((e) => `
+          <div class="r-entry">${esc(e.degree)}${e.institution ? " - " + esc(e.institution) : ""} ${esc(e.year || "")}</div>`).join("") || "<p class='hint'>None</p>"}
+      </div>
+      <button id="download-draft" class="secondary" style="margin:8px 0">Download draft as .txt</button>
       <h3 style="margin-top:12px">Changes to review (${res.changes.length})</h3>
       ${res.changes.map((c) => `
         <div class="change">
@@ -197,4 +214,24 @@ $("#tailor-btn").addEventListener("click", async () => {
   } catch (e) {
     $("#tailor-output").innerHTML = "<p class='hint'>Error: " + esc(e.message) + "</p>";
   }
+});
+
+function draftToText(d) {
+  const lines = [d.name, "Target: " + d.target_role, "", d.summary, "", "SKILLS",
+    (d.skills || []).join(", "), "", "EXPERIENCE"];
+  (d.experience || []).forEach((e) => lines.push(`${e.title} - ${e.company} (${e.period})`));
+  lines.push("", "EDUCATION");
+  (d.education || []).forEach((e) =>
+    lines.push(`${e.degree}${e.institution ? " - " + e.institution : ""} ${e.year || ""}`.trim()));
+  return lines.join("\n");
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.id !== "download-draft" || !lastDraft) return;
+  const blob = new Blob([draftToText(lastDraft)], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "tailored-resume.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
 });

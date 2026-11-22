@@ -12,7 +12,9 @@ review before using.
 
 1. **Resume parsing** - upload a PDF or TXT resume; the app extracts name,
    skills, experience and education into a structured profile you can correct.
-2. **Job ingestion** - a seed CSV of 32 realistic India-focused jobs is
+2. **Job ingestion** - a seed CSV of 32 fictional India-focused openings
+   (invented for this demo; company names are placeholders, the listings
+   are not real) is
    normalized, deduplicated and indexed on startup.
 3. **Hybrid search** - BM25 keyword scoring + vector cosine similarity,
    merged with min-max normalization.
@@ -113,7 +115,9 @@ works on both. `docker-compose.yml` includes an optional `pgvector` profile.
   That is why every parsed field is user-correctable, and why the Claude path
   exists. Field-level accuracy has been verified only on the sample resumes
   in `tests/` and `sample_data/`.
-- The job catalogue is a 32-job seed CSV, not a live job board.
+- The job catalogue is 32 FICTIONAL openings written for this demo.
+  Company names are placeholders; these are not real job listings, and
+  it is not connected to any live job board.
 - Hashing embeddings will miss paraphrase-level matches a real embedding
   model would catch.
 - No authentication: it is a single-candidate demo. Profile row id=1.

@@ -55,6 +55,20 @@ def understand_query(query: str) -> QueryUnderstanding:
     return QueryUnderstanding(skills=skills, location=location, terms=terms)
 
 
+def apply_query_constraints(jobs, qu: QueryUnderstanding):
+    """Hard constraints from the query, applied BEFORE scoring.
+
+    "Remote" is a real constraint, not a hint: when the query asks for remote
+    roles, non-remote jobs are excluded entirely instead of silently ranking
+    below remote ones. Returns (filtered_jobs, note_or_None).
+    """
+    if (qu.get("location") or "").lower() == "remote":
+        remote = [j for j in jobs if "remote" in (j.location or "").lower()]
+        return remote, (f"Remote requested: showing only remote roles "
+                        f"({len(remote)} of {len(jobs)} in the catalogue).")
+    return jobs, None
+
+
 def _norm_skills(skills: List[str]) -> set:
     return {s.lower() for s in skills}
 

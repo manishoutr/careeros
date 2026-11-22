@@ -43,3 +43,8 @@ input, select { background: #161d2e; border: 1px solid #263050; color: #e8ecf4; 
 .change .after { color: #9de6b8; display: block; }
 .change .source { color: #68779c; font-size: .72rem; display: block; margin-top: 3px; }
 pre.draft { background: #121828; border-radius: 8px; padding: 14px; font-size: .82rem; white-space: pre-wrap; margin-top: 12px; }
+.resume h3.r-name { margin: 0 0 2px; }
+.resume h4 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; }
+.resume .r-summary { margin: 8px 0; }
+.resume .r-entry { margin: 4px 0; }
+button.secondary { background: transparent; border: 1px solid currentColor; }

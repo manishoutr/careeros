@@ -12,7 +12,7 @@ from typing import Optional
 from ..models import Job
 from ..schemas import ProfileData
 from .llm import llm
-from .ranking import score_job, understand_query
+from .ranking import apply_query_constraints, score_job, understand_query
 from .retrieval import hybrid_scores
 
 TOOLS = [
@@ -49,13 +49,22 @@ def _search_jobs_tool(db, profile: Optional[ProfileData], query: str, k: int = 5
     if not jobs:
         return "The job catalogue is empty."
     qu = understand_query(query)
+    jobs, constraint_note = apply_query_constraints(jobs, qu)
+    if not jobs:
+        return ("No jobs in the catalogue satisfy the query's constraints. "
+                + (constraint_note or ""))
     texts = [f"{j.title} {j.company} {j.location} {' '.join(j.skills_list())} {j.description}"
              for j in jobs]
     combined, _ = hybrid_scores(texts, [j.embedding_list() for j in jobs], query)
-    ranked = sorted(zip(jobs, combined), key=lambda t: t[1], reverse=True)[:k]
-    lines = []
-    for job, rel in ranked:
+    scored = []
+    for job, rel in zip(jobs, combined):
         scores, reasons = score_job(job, rel, qu, profile)
+        scored.append((job, scores, reasons))
+    scored.sort(key=lambda t: t[1].total, reverse=True)
+    lines = []
+    if constraint_note:
+        lines.append(constraint_note)
+    for job, scores, reasons in scored[:k]:
         lines.append(json.dumps({
             "id": job.id, "title": job.title, "company": job.company,
             "location": job.location, "type": job.job_type,
@@ -92,7 +101,7 @@ def _offline_answer(db, profile: Optional[ProfileData], message: str) -> dict:
     out = _search_jobs_tool(db, profile, message, k=3)
     trace.append({"tool": "search_jobs", "input": {"query": message, "k": 3},
                   "output_summary": out[:200]})
-    jobs = [json.loads(ln) for ln in out.splitlines()] if out.startswith("[") or "{" in out else []
+    jobs = [json.loads(ln) for ln in out.splitlines() if ln.startswith("{")]
     if not jobs:
         return {"answer": "I couldn't find matching jobs in the catalogue. "
                           "Try different keywords or ingest more jobs.", "tool_trace": trace}

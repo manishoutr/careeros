@@ -105,3 +105,27 @@ def test_metrics_endpoint():
         res = client.get("/api/metrics")
         assert res.status_code == 200
         assert res.json()["requests"] >= 1
+
+
+def test_remote_query_is_a_hard_constraint():
+    """Asking for remote roles must not return non-remote jobs, even weakly
+    ranked ones - remote is a constraint, not a hint."""
+    with client:
+        res = client.post("/api/search", json={"query": "remote python internships", "k": 10})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["results"], "expected the two seeded remote roles"
+    for r in data["results"]:
+        assert "remote" in r["job"]["location"].lower()
+
+
+def test_assistant_respects_remote_constraint():
+    """The assistant's job tool applies the same hard remote constraint, so
+    it never recommends a non-remote job for a remote request."""
+    with client:
+        res = client.post("/api/assistant/chat",
+                          json={"message": "find me remote python internships"})
+        assert res.status_code == 200
+        body = res.json()
+        assert "Hasura" in body["answer"] or "Postman" in body["answer"]
+        assert "Bhubaneswar" not in body["answer"] and "TCS" not in body["answer"]
