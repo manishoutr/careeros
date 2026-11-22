@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
+import { createTracker, describe } from '../searchState.js'
 
 function Bar({ label, value }) {
   const pct = Math.round(value * 100)
@@ -65,8 +66,10 @@ export default function FindView({ onTailor }) {
   const [remoteOnly, setRemoteOnly] = useState(false)
   const [results, setResults] = useState([])
   const [selected, setSelected] = useState(null)
-  const [meta, setMeta] = useState('Search to see matches')
-  const [searched, setSearched] = useState(false)
+  const [status, setStatus] = useState('idle')   // idle | loading | ok | error
+  const [outcome, setOutcome] = useState({ data: null, error: '' })
+  const tracker = useRef(createTracker()).current
+  const meta = describe(status, outcome.data, outcome.error)
 
   const [feed, setFeed] = useState(null)
   useEffect(() => { api('/api/jobs/sync/status').then(setFeed).catch(() => {}) }, [])
@@ -75,7 +78,8 @@ export default function FindView({ onTailor }) {
     let finalQ = q.trim()
     if (!finalQ) return
     if (remote && !/\bremote\b/i.test(finalQ)) finalQ += ' remote'
-    setSearched(true)
+    const id = tracker.begin()
+    setStatus('loading')
     setSelected(null)
     try {
       const data = await api('/api/search', {
@@ -83,16 +87,16 @@ export default function FindView({ onTailor }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: finalQ, k: 10 }),
       })
+      if (!tracker.isCurrent(id)) return  // a newer search replaced this one
       setResults(data.results)
-      const note = data.results.length && data.results[0].reasons[0].startsWith('Remote requested')
-        ? data.results[0].reasons[0] : null
-      setMeta(data.results.length
-        ? `${data.results.length} results${note ? ' · ' + note : ''}`
-        : 'No jobs in the catalogue matched')
+      setOutcome({ data, error: '' })
+      setStatus('ok')
       if (data.results.length) setSelected(0)
     } catch (e) {
-      setMeta('Error: ' + e.message)
+      if (!tracker.isCurrent(id)) return
       setResults([])
+      setOutcome({ data: null, error: e.message })
+      setStatus('error')
     }
   }
 
@@ -119,8 +123,10 @@ export default function FindView({ onTailor }) {
       </div>
       <div className="split">
         <section className="results-col">
-          {!searched && <p className="hint">Matches appear here. Select one to see why it fits.</p>}
-          {searched && results.length === 0 && <p className="hint">No jobs in the catalogue matched.</p>}
+          {status === 'idle' && <p className="hint">Matches appear here. Select one to see why it fits.</p>}
+          {status === 'loading' && <p className="hint">Searching… the first search after the site wakes can take a few seconds.</p>}
+          {status === 'error' && <p className="hint">The search failed ({outcome.error}). Try again.</p>}
+          {status === 'ok' && results.length === 0 && <p className="hint">No jobs in the catalogue matched.</p>}
           {results.map((r, i) => (
             <div key={r.job.id} className={'card' + (i === selected ? ' selected' : '')}
                  onClick={() => setSelected(i)}>
