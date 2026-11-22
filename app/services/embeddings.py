@@ -38,7 +38,8 @@ STOPWORDS = {"a", "an", "the", "in", "on", "at", "of", "to", "for",
              "what", "which", "who", "whom", "whose", "when", "where",
              "why", "how", "do", "does", "did", "can", "could", "should",
              "would", "i", "me", "my", "he", "she", "they", "them", "his",
-             "her", "their", "there", "here"}
+             "her", "their", "there", "here",
+             "am", "have", "has", "had", "was", "were", "been", "being"}
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 MODEL_VERSION = "minilm-l6-v2-onnx-q8"

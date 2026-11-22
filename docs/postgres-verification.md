@@ -41,3 +41,15 @@ Neon free tier (no scheduled deletion) chosen over Render free Postgres
 the repo. Rollback: unset `DATABASE_URL` on the host to return to the
 bundled SQLite path; `app/services/vectorstore.py` detects the backend and
 disables pgvector cleanly.
+
+## Hosted confirmation (2026-11-22, ~19:15 IST)
+
+Render service careeros (srv-dc1dlnnf3r2c73ce7k50, Free/512MB, Singapore)
+runs against the Neon database above. `/api/health`:
+`db:"postgresql"`, `vectorstore:"pgvector"`, `embeddings.semantic:true`.
+Hosted search, skill-gap and assistant flows exercised over HTTP; service
+logs show clean startup (model download + pgvector init) and 200s with no
+OOM restarts. Note: Render's memory/CPU graphs are paid-plan-only, so
+memory-fit evidence is observed behavior (stable serving of all flows),
+not a dashboard metric. First cutover deploy failed on SQLAlchemy 2.1's
+new psycopg3 default; fixed by pinning postgresql+psycopg2 in app/db.py.

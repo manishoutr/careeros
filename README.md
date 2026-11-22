@@ -49,6 +49,10 @@ and uploaded data is ephemeral - it resets on redeploy or restart.
 
 ![Assistant: grounded answers with tool-call trace](docs/screenshots/assistant.png)
 
+![Skill gaps: coverage and missing skills for a selected role](docs/screenshots/skill-gaps.png)
+
+![Mobile layout (390px)](docs/screenshots/mobile-home.png)
+
 ![Resume studio: tailored draft with a logged change history](docs/screenshots/resume-studio.png)
 
 ## Quickstart (5 minutes, no API key needed)
