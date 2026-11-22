@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 
 function Bar({ label, value }) {
@@ -12,7 +12,6 @@ function Bar({ label, value }) {
 }
 
 function sourceLabel(job) {
-  if (job.source === 'seed') return 'demo listing'
   return 'via ' + job.source
 }
 
@@ -69,6 +68,9 @@ export default function FindView({ onTailor }) {
   const [meta, setMeta] = useState('Search to see matches')
   const [searched, setSearched] = useState(false)
 
+  const [feed, setFeed] = useState(null)
+  useEffect(() => { api('/api/jobs/sync/status').then(setFeed).catch(() => {}) }, [])
+
   const runSearch = async (q = query, remote = remoteOnly) => {
     let finalQ = q.trim()
     if (!finalQ) return
@@ -97,9 +99,11 @@ export default function FindView({ onTailor }) {
   return (
     <section className="view active">
       <h2>Find your next role.</h2>
-      <p className="hint"><strong>Demo data:</strong> listings marked "demo listing" are fictional and
-        written for the project. Listings with a source name come from real, public job feeds and link
-        out to the original posting.</p>
+      <p className="hint"><strong>Real listings only.</strong> Every result comes from a public job
+        feed (Remotive, Arbeitnow, company boards on Greenhouse) and links to the original posting.
+        {feed && feed.last_success_at
+          ? ` Feeds refresh automatically about every ${feed.interval_hours} hours; last refreshed ${feed.last_success_at.replace('T', ' ').replace('Z', ' UTC')}, ${feed.real_active_jobs} open listings.`
+          : ' The first refresh from the live feeds is running or still waiting; results appear once it finishes.'}</p>
       <div className="searchbar">
         <input value={query} onChange={(e) => setQuery(e.target.value)}
                onKeyDown={(e) => e.key === 'Enter' && runSearch()}
@@ -126,7 +130,7 @@ export default function FindView({ onTailor }) {
               <div className="meta">
                 <span className="chip">{sourceLabel(r.job)}</span>
                 {r.job.posted_date && <span> posted {r.job.posted_date}</span>}
-                {r.job.url && r.job.source !== 'seed' &&
+                {r.job.url &&
                   <span> · <a href={r.job.url} target="_blank" rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}>apply ↗</a></span>}
               </div>

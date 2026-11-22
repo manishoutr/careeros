@@ -31,6 +31,17 @@ def _register():
     FETCHERS["greenhouse"] = boards.fetch
 
 
+def _release_memory() -> None:
+    """Hand freed memory back to the OS between sources (512 MB free host)."""
+    import gc
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
 def _today() -> str:
     return date.today().isoformat()
 
@@ -62,6 +73,11 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
         except Exception as e:
             log.warning("source %s failed: %s", name, e)
             report["sources"][name] = f"error: {e}"
+            continue
+        if not raw_jobs:
+            # An empty answer is more likely an outage than a source with no
+            # vacancies at all; never expire a whole source on that evidence.
+            report["sources"][name] = "empty response: kept existing listings"
             continue
         report["fetched"] += len(raw_jobs)
         report["sources"][name] = len(raw_jobs)
@@ -120,6 +136,9 @@ def sync_sources(db, source_names: Optional[List[str]] = None) -> Dict:
                 job.is_expired = 1
                 report["expired"] += 1
         db.commit()
+        del raw_jobs, to_embed
+        db.expire_all()
+        _release_memory()
 
     from .. import vectorstore  # keep pgvector store in step, when enabled
     if vectorstore.available():

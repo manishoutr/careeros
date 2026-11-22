@@ -12,6 +12,14 @@ class Settings:
         # offline: never call the API.
         self.llm_mode = os.getenv("LLM_MODE", "auto")
         self.data_dir = os.getenv("DATA_DIR", "./data")
+        # Real listings only by default: the fictional demo catalogue is never
+        # loaded, and any leftover demo rows are deleted at startup. Set
+        # CAREEROS_DEMO_SEED=1 only for local demos and tests.
+        self.demo_seed = os.getenv("CAREEROS_DEMO_SEED", "0") == "1"
+        # Automatic refresh of real feeds. Remotive asks for at most 4 requests
+        # a day, so the floor is 6 hours between syncs.
+        self.auto_sync = os.getenv("CAREEROS_AUTO_SYNC", "1") == "1"
+        self.sync_interval_hours = max(6.0, float(os.getenv("CAREEROS_SYNC_INTERVAL_HOURS", "6")))
 
     @property
     def claude_enabled(self) -> bool:

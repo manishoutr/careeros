@@ -18,7 +18,9 @@ def dedupe_key(title: str, company: str, location: str) -> str:
 def job_text(title: str, company: str, location: str, skills: list,
              description: str) -> str:
     """The document we index for retrieval: every searchable field in one string."""
-    return " ".join([title, company, location, " ".join(skills), description])
+    # Cap the description: the model reads 256 tokens anyway, and long inputs
+    # inflate tokenizer memory on the 512 MB host.
+    return " ".join([title, company, location, " ".join(skills), (description or "")[:1200]])
 
 
 def ingest_csv(db, fileobj: IO[str]) -> Tuple[int, int]:

@@ -22,7 +22,7 @@ from .config import settings
 from .services import assistant as assistant_service
 from .services import skillgap as skillgap_service
 from .services import tailor as tailor_service
-from .services import vectorstore
+from .services import scheduler, vectorstore
 from .services.embeddings import backend_info as embedding_backend_info
 from .services.sources.sync import sync_sources
 from .services.ingest import ingest_csv
@@ -66,7 +66,9 @@ def startup() -> None:
     # Auto-seed the demo catalogue on first run so the demo path is one command.
     db = next(get_db())
     try:
-        if SEED_CSV.exists() and db.query(Job).count() == 0:
+        if not settings.demo_seed:
+            _purge_demo_jobs(db)
+        if settings.demo_seed and SEED_CSV.exists() and db.query(Job).count() == 0:
             with open(SEED_CSV, newline="", encoding="utf-8") as f:
                 inserted, skipped = ingest_csv(db, f)
             METRICS["ingest_runs"] += 1
@@ -81,6 +83,21 @@ def startup() -> None:
             log.info("seeded sample candidate profile")
     finally:
         db.close()
+    scheduler.start()
+
+
+def _purge_demo_jobs(db) -> None:
+    """Real listings only: delete any fictional demo rows left by earlier
+    versions, so they cannot reappear in results after a redeploy."""
+    demo = db.query(Job).filter(Job.source == "seed").all()
+    if not demo:
+        return
+    for job in demo:
+        if vectorstore.available():
+            vectorstore.remove(job.id)
+        db.delete(job)
+    db.commit()
+    log.info("removed %d fictional demo listings", len(demo))
 
 
 # --- helpers -------------------------------------------------------------
@@ -109,6 +126,8 @@ def health(db: Session = Depends(get_db)):
     active = db.query(Job).filter(Job.is_expired == 0).count()
     return {"status": "ok", "llm_mode": llm.mode,
             "jobs": db.query(Job).count(), "active_jobs": active,
+            "demo_listings": "enabled" if settings.demo_seed else "disabled",
+            "last_sync_success": scheduler.status(db)["last_success_at"],
             "embeddings": embedding_backend_info(),
             "vectorstore": "pgvector" if vectorstore.available() else "python",
             "db": "postgresql" if settings.database_url.startswith("postgres") else "sqlite"}
@@ -168,6 +187,8 @@ def update_profile(data: ProfileData, db: Session = Depends(get_db)):
 
 @app.post("/api/jobs/ingest")
 def ingest(db: Session = Depends(get_db)):
+    if not settings.demo_seed:
+        raise HTTPException(403, "Demo listings are disabled: CareerOS shows real listings only")
     if not SEED_CSV.exists():
         raise HTTPException(404, "Seed file not found")
     with open(SEED_CSV, newline="", encoding="utf-8") as f:
@@ -181,6 +202,8 @@ def ingest(db: Session = Depends(get_db)):
 def list_jobs(skip: int = 0, limit: int = 200, include_expired: bool = False,
               source: str = "", db: Session = Depends(get_db)):
     q = db.query(Job)
+    if not settings.demo_seed:
+        q = q.filter(Job.source != "seed")
     if not include_expired:
         q = q.filter(Job.is_expired == 0)
     if source:
@@ -189,12 +212,19 @@ def list_jobs(skip: int = 0, limit: int = 200, include_expired: bool = False,
     return [_job_out(j) for j in q.order_by(Job.id).offset(max(0, skip)).limit(limit).all()]
 
 
-@app.post("/api/jobs/sync", response_model=SyncResponse)
+@app.post("/api/jobs/sync")
 def sync_jobs_endpoint(db: Session = Depends(get_db)):
-    """Fetch the configured external job sources and merge new listings."""
-    report = sync_sources(db)
-    METRICS["ingest_runs"] += 1
-    return SyncResponse(**report)
+    """Ask for a refresh of the real job feeds. Runs in the background and is
+    rate limited (one run per sync interval), so repeated calls are harmless."""
+    result = scheduler.request_sync(db, "external")
+    if result == "started":
+        METRICS["ingest_runs"] += 1
+    return {"result": result, **scheduler.status(db)}
+
+
+@app.get("/api/jobs/sync/status")
+def sync_status(db: Session = Depends(get_db)):
+    return scheduler.status(db)
 
 
 @app.get("/api/jobs/{job_id}/skill-gap", response_model=SkillGapResponse)
@@ -213,9 +243,13 @@ def skill_gap(job_id: int, db: Session = Depends(get_db)):
 @app.post("/api/search", response_model=SearchResponse)
 def search(req: SearchRequest, db: Session = Depends(get_db)):
     METRICS["searches"] += 1
+    if settings.auto_sync:
+        scheduler.request_sync(db, "schedule")  # no-op unless the data is stale
     jobs = vectorstore.candidate_jobs(db, req.query)
     if jobs is None:
         jobs = db.query(Job).filter(Job.is_expired == 0).all()
+    if not settings.demo_seed:
+        jobs = [j for j in jobs if j.source != "seed"]
     if not jobs:
         return SearchResponse(query=req.query, count=0, results=[])
     _, profile = _get_profile(db)

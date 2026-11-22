@@ -68,3 +68,15 @@ class TailoredDraft(Base):
     draft = Column(Text, default="{}")    # JSON tailored resume draft
     changes = Column(Text, default="[]")  # JSON list of source-to-edit changes
     created_at = Column(DateTime, server_default=func.now())
+
+
+class SyncRun(Base):
+    """One automatic or manual refresh of the real job feeds."""
+    __tablename__ = "sync_runs"
+
+    id = Column(Integer, primary_key=True)
+    started_at = Column(String, default="")    # ISO UTC timestamp
+    finished_at = Column(String, default="")
+    trigger = Column(String, default="")       # startup / schedule / external / manual
+    status = Column(String, default="running")  # running / ok / partial / failed
+    report = Column(Text, default="{}")        # JSON sync report

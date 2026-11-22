@@ -99,7 +99,15 @@ class _MiniLM:
                 hf_hub_download(MODEL_NAME, name, local_dir=str(model_dir))
         import onnxruntime as ort
         from tokenizers import Tokenizer
-        sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+        # Arena and memory-pattern caching keep every distinct batch shape
+        # alive; with variable-length listings that grew to ~800 MB during a
+        # sync. Off, and one thread, keeps it inside a 512 MB free host.
+        opts = ort.SessionOptions()
+        opts.enable_cpu_mem_arena = False
+        opts.enable_mem_pattern = False
+        opts.intra_op_num_threads = 1
+        sess = ort.InferenceSession(str(onnx_path), sess_options=opts,
+                                    providers=["CPUExecutionProvider"])
         tok = Tokenizer.from_file(str(tok_path))
         tok.enable_truncation(max_length=256)
         tok.enable_padding()
@@ -126,8 +134,8 @@ class _MiniLM:
         # Sub-batches cap peak memory: token embeddings for one sub-batch of
         # 32 at 256 tokens x 384 dims is ~12 MB, vs hundreds of MB if a full
         # ingest batch ran at once (that OOM-killed the 512 MB demo host).
-        for start in range(0, len(texts), 32):
-            part = [t or " " for t in texts[start:start + 32]]
+        for start in range(0, len(texts), 4):
+            part = [t or " " for t in texts[start:start + 4]]
             enc = self._tokenizer.encode_batch(part)
             ids = np.array([e.ids for e in enc], dtype=np.int64)
             mask = np.array([e.attention_mask for e in enc], dtype=np.int64)

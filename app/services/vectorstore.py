@@ -85,6 +85,9 @@ def sync_all(db) -> int:
     from ..models import Job
     n = 0
     for job in db.query(Job).all():
+        if job.is_expired:
+            remove(job.id)  # expired listings must not reach search
+            continue
         vec = job.embedding_list()
         if vec:
             upsert(job.id, vec)
@@ -102,5 +105,5 @@ def candidate_jobs(db, query_text: str, limit: int = 60):
     ids = search(embed(query_text), limit)
     if not ids:
         return []
-    by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(ids)).all()}
+    by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(ids), Job.is_expired == 0).all()}
     return [by_id[i] for i in ids if i in by_id]

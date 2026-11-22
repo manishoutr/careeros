@@ -17,7 +17,9 @@ API = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs"
 
 # Verified public boards (checked 2026-11). Override with
 # CAREEROS_GREENHOUSE_BOARDS="slug1,slug2".
-DEFAULT_BOARDS = ["airbnb", "cloudflare", "figma"]
+DEFAULT_BOARDS = ["airbnb", "cloudflare", "figma", "stripe", "databricks", "gitlab",
+                  "coinbase", "razorpaysoftwareprivatelimited", "groww", "druva",
+                  "mongodb", "twilio", "okta", "zscaler", "datadog", "elastic"]
 
 
 def configured_boards() -> List[str]:
@@ -25,7 +27,19 @@ def configured_boards() -> List[str]:
     return [s.strip() for s in raw.split(",") if s.strip()] if raw else list(DEFAULT_BOARDS)
 
 
-MAX_PER_BOARD = 100  # keeps the free-tier catalogue bounded; most recent first
+MAX_PER_BOARD = 60  # keeps the free-tier catalogue bounded
+_INDIA = ("india", "bengaluru", "bangalore", "mumbai", "hyderabad", "pune",
+          "delhi", "gurgaon", "gurugram", "noida", "chennai", "kolkata")
+
+
+def _priority(job: dict) -> tuple:
+    """Entry-level and India/remote roles first, then most recently updated.
+    Sorted descending, so True sorts before False."""
+    loc = ((job.get("location") or {}).get("name") or "").lower()
+    title = (job.get("title") or "").lower()
+    entry = any(w in title for w in ("intern", "graduate", "junior", "entry", "associate"))
+    india = any(w in loc for w in _INDIA)
+    return (entry, india, "remote" in loc, job.get("updated_at") or "")
 
 
 def fetch(slugs: List[str] = None, timeout: int = 20) -> List[RawJob]:
@@ -36,7 +50,7 @@ def fetch(slugs: List[str] = None, timeout: int = 20) -> List[RawJob]:
             continue  # board moved; skip rather than fail the whole sync
         resp.raise_for_status()
         jobs = sorted(resp.json().get("jobs", []),
-                      key=lambda j: j.get("updated_at") or "", reverse=True)
+                      key=_priority, reverse=True)
         for j in jobs[:MAX_PER_BOARD]:
             title = (j.get("title") or "").strip()
             if not title:

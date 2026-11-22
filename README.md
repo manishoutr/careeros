@@ -17,8 +17,12 @@ generate a tailored resume draft you review before using.
    (free job-board API) and public Greenhouse company boards. Listings carry
    source, posting date and last-verified date; duplicates are merged and
    listings that disappear or go stale are marked expired and hidden.
-   A seed CSV of 32 fictional India-focused openings ships for offline demo
-   and tests (marked "demo listing" in the UI; they are not real).
+   Results are real listings only. The fictional demo CSV is off by default
+   (CAREEROS_DEMO_SEED=1 re-enables it for local demos/tests), and any leftover
+   demo rows are deleted at startup.
+   Feeds refresh automatically every 6 hours (background thread, stale-on-search
+   check, and a scheduled GitHub Action that wakes the free host); status at
+   GET /api/jobs/sync/status.
 3. **Hybrid semantic search** - BM25 keyword scoring + vector similarity from
    real embeddings (all-MiniLM-L6-v2, 384-dim, quantized ONNX - no GPU, no
    API key). Two fusion strategies are implemented (weighted min-max and
