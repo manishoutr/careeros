@@ -56,12 +56,13 @@ TOOLS = [
 
 
 def search_jobs_tool(db, profile: Optional[ProfileData], query: str, k: int = 5) -> str:
-    jobs = vectorstore.candidate_jobs(db, query)
+    qu = understand_query(query)
+    jobs = vectorstore.candidate_jobs(
+        db, query, constrained=bool(qu.get("entry_intent") or qu.get("location")))
     if jobs is None:
         jobs = db.query(Job).filter(Job.is_expired == 0).all()
     if not jobs:
         return "The job catalogue is empty."
-    qu = understand_query(query)
     jobs, constraint_note = apply_query_constraints(jobs, qu)
     if not jobs:
         return ("No jobs in the catalogue satisfy the query's constraints. "

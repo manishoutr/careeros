@@ -262,7 +262,9 @@ def search(req: SearchRequest, db: Session = Depends(get_db)):
     METRICS["searches"] += 1
     if settings.auto_sync:
         scheduler.request_sync(db, "schedule")  # no-op unless the data is stale
-    jobs = vectorstore.candidate_jobs(db, req.query)
+    qu = understand_query(req.query)
+    jobs = vectorstore.candidate_jobs(
+        db, req.query, constrained=bool(qu.get("entry_intent") or qu.get("location")))
     if jobs is None:
         jobs = db.query(Job).filter(Job.is_expired == 0).all()
     if not settings.demo_seed:
@@ -270,7 +272,6 @@ def search(req: SearchRequest, db: Session = Depends(get_db)):
     if not jobs:
         return SearchResponse(query=req.query, count=0, results=[])
     _, profile = _get_profile(db)
-    qu = understand_query(req.query)
     jobs, constraint_note = apply_query_constraints(jobs, qu)
     if not jobs:
         return SearchResponse(query=req.query, count=0, results=[])

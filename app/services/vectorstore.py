@@ -95,10 +95,12 @@ def sync_all(db) -> int:
     return n
 
 
-def candidate_jobs(db, query_text: str, limit: int = 60):
+def candidate_jobs(db, query_text: str, limit: int = 60, constrained: bool = False):
     """pgvector shortlist for a query, or None when the store is off
     (callers then fall back to scanning the whole catalogue)."""
-    if not available():
+    # A constrained query (internship, location, remote) is filtered after
+    # retrieval, so a top-60 shortlist could hide every match: scan instead.
+    if not available() or constrained:
         return None
     from ..models import Job
     from .embeddings import embed
