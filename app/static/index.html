@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareerOS</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>CareerOS</h1>
+    <span id="mode-badge" class="badge">...</span>
+    <nav>
+      <button class="tab active" data-tab="profile">Profile</button>
+      <button class="tab" data-tab="jobs">Jobs</button>
+      <button class="tab" data-tab="assistant">Assistant</button>
+      <button class="tab" data-tab="tailor">Tailor</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- PROFILE -->
+    <section id="tab-profile" class="panel active">
+      <h2>Candidate profile</h2>
+      <p class="hint">Upload a PDF or TXT resume. Every parsed field is editable - corrections are saved verbatim.</p>
+      <input type="file" id="resume-file" accept=".pdf,.txt,.md" />
+      <button id="upload-btn">Upload &amp; parse</button>
+      <span id="upload-status"></span>
+      <div id="profile-view"></div>
+      <button id="save-profile" class="hidden">Save corrections</button>
+      <span id="save-status"></span>
+    </section>
+
+    <!-- JOBS -->
+    <section id="tab-jobs" class="panel">
+      <h2>Job search</h2>
+      <div class="searchbar">
+        <input id="search-input" placeholder='Try "backend internships using Python in India"' />
+        <button id="search-btn">Search</button>
+      </div>
+      <div id="search-results"></div>
+    </section>
+
+    <!-- ASSISTANT -->
+    <section id="tab-assistant" class="panel">
+      <h2>Career assistant</h2>
+      <p class="hint">Answers are grounded in your profile and the job catalogue via tool calls. Offline mode uses deterministic logic and says so.</p>
+      <div id="chat-log"></div>
+      <div class="searchbar">
+        <input id="chat-input" placeholder="Which jobs fit my profile?" />
+        <button id="chat-btn">Send</button>
+      </div>
+    </section>
+
+    <!-- TAILOR -->
+    <section id="tab-tailor" class="panel">
+      <h2>Tailored resume draft</h2>
+      <p class="hint">Picks a job and drafts a role-specific resume. Safety rule: it can only reuse facts from your profile - code rejects anything invented.</p>
+      <select id="tailor-job"></select>
+      <button id="tailor-btn">Generate draft</button>
+      <div id="tailor-output"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
