@@ -8,7 +8,7 @@ review before using.
 > Learning-project notes are inline across the codebase. This README explains
 > what is built, why it is built that way, and what is deliberately left out.
 
-## What it does (all working end to end)
+## What it does
 
 1. **Resume parsing** - upload a PDF or TXT resume; the app extracts name,
    skills, experience and education into a structured profile you can correct.
