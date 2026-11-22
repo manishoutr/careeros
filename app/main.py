@@ -32,6 +32,7 @@ log = logging.getLogger("careeros")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SEED_CSV = BASE_DIR / "seed" / "jobs.csv"
+SAMPLE_RESUME_TXT = BASE_DIR / "sample_data" / "sample_resume.txt"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="CareerOS", version="1.0.0",
@@ -66,6 +67,14 @@ def startup() -> None:
                 inserted, skipped = ingest_csv(db, f)
             METRICS["ingest_runs"] += 1
             log.info("seeded %d jobs (%d duplicates skipped)", inserted, skipped)
+        # Seed the sample candidate profile on first run so search, match
+        # reasons and tailoring work out of the box. Uploading a real resume
+        # replaces it.
+        if SAMPLE_RESUME_TXT.exists() and db.query(Profile).filter_by(id=1).first() is None:
+            profile = parse_resume(SAMPLE_RESUME_TXT.read_text(encoding="utf-8"))
+            db.merge(Profile(id=1, name=profile.name, data=profile.model_dump_json()))
+            db.commit()
+            log.info("seeded sample candidate profile")
     finally:
         db.close()
 

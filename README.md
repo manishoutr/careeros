@@ -56,8 +56,9 @@ python run.py                          # http://localhost:8000
 
 Demo path:
 
-1. Open http://localhost:8000, go to **Profile**, upload
-   `sample_data/sample_resume.pdf` (or your own resume).
+1. Open http://localhost:8000. A sample candidate profile is preloaded on
+   first run; go to **Profile** to see it, and upload
+   `sample_data/sample_resume.pdf` (or your own resume) to replace it.
 2. Go to **Jobs** and search `backend internships using Python in India`.
    Expand the score breakdown and reasons on each result.
 3. Go to **Assistant** and ask "Which jobs fit my profile?".

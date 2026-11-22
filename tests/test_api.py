@@ -38,6 +38,11 @@ def test_health_and_seed():
         assert body["llm_mode"] == "offline"
         assert body["jobs"] >= 30  # seed catalogue loaded
 
+        # sample candidate profile seeded on first run
+        res = client.get("/api/profile")
+        assert res.status_code == 200
+        assert res.json()["name"] == "Aarav Sharma"
+
 
 def test_full_demo_flow():
     with client:
