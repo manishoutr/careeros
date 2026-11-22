@@ -1,0 +1,15 @@
+Aarav Sharma
+Bhubaneswar, India | aarav.sharma@example.com
+
+Skills
+Python, FastAPI, PostgreSQL, Docker, React, JavaScript, Git, Linux, Pandas, SQL, Machine Learning, Redis
+
+Experience
+Backend Intern at Odisha Web Works (Jun 2025 - Aug 2025)
+- Built FastAPI endpoints backed by PostgreSQL for a college events app
+- Wrote pytest suites that caught regressions before release
+Open Source Contributor at CampusDev Club (Jan 2025 - Present)
+- Reviewed pull requests and fixed bugs in a React dashboard
+
+Education
+B.Tech Computer Science, Odisha University of Technology and Research, 2027
